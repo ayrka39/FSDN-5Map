@@ -113,7 +113,11 @@ ul {
     #intro {
         margin-left: 18px;
         font-size: 70%;
-        width: 40%;
+        width: 80%;
+    }
+    
+    #intro h2 {
+        width: 100%;
     }
     
     #intro p, h5 {
@@ -134,7 +138,7 @@ ul {
        float: left;
        font-size: 90%;
        line-height: 25px;
-       width: 50%;
+       width: 90%;
     }
 
 

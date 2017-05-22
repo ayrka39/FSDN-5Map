@@ -175,32 +175,35 @@ var ViewModel = function() {
     
      // Limits the map to display all the locations on the screen
     var bounds = new google.maps.LatLngBounds();
-   
+    
 	// function for listview
 	self.filteredList = ko.computed(function() {
-        var searchStr = self.searchTerm().toLowerCase();
-        if (searchStr === "") {
-            return self.routes();           
+	    infowindow.close();
+	    clearMarkers();
+        showMarkers();
+	   
+      var searchStr = self.searchTerm().toLowerCase();   
+         
+        if (!searchStr) {
+            
+            return self.routes(); 
+                      
         } else {
-            infowindow.close();
-            return ko.utils.arrayFilter(self.routes(), function(route) {
+             return self.routes().filter((route) => {           
                 var title = route.title.toLowerCase();
-                return (title.indexOf(searchStr) !== -1);
+                var isMatching = title.indexOf(searchStr) !== -1;
+                
+                if (isMatching) {
+                    route.marker.setVisible(true);
+                } else {
+                    route.marker.setVisible(false);
+                }
+
+                return isMatching;                 
             });
         }
     });
-
-    // show full map with markers or searched route
-	self.showMarker = ko.computed(function() {
-		var searchStr = self.searchTerm().toLowerCase();
-		if (!searchStr) {
-			createMarker(searchStr);
-		} else {	
-		    clearMarkers();
-			createMarker(searchStr);
-		}
-	});
-    	
+     	
 	// show a marker when selecting a route
 	self.selectedRoute = function(route) {
 		displayInfowindow(route.marker, infowindow);
@@ -214,9 +217,9 @@ var ViewModel = function() {
     // show infowindow and image from flickr
 	function displayInfowindow(marker, infowindow) {
 	    
-        if (infowindow.marker != marker) {
+       // if (infowindow.marker != marker) {
             infowindow.setContent('');
-            infowindow.marker = marker;
+           // infowindow.marker = marker;
 		
 			var method = 'flickr.photos.search';
 			var query = marker.title.replace(/(\d\.\s)/, '');
@@ -248,47 +251,31 @@ var ViewModel = function() {
 			 infowindow.addListener('closeclick', function() {
                 infowindow.marker = null;
             });
-		}
+		//}
 	}
 		
-    function createMarker(searchStr) {    
+    function showMarkers() {    
         self.routes().forEach(function(route) {
             var position = route.coordinates;
             var title = route.title;
             var description = route.description;
             var icon = "http://maps.google.com/mapfiles/kml/paddle/" + route.number + ".png";
-            var filteredPlace = route.title.toLowerCase();
-            if (searchStr === "") {
-                route.marker = new google.maps.Marker({
+            route.marker = new google.maps.Marker({
                     map: map,
                     position: position,
                     title: title,
                     description: description,
                     icon: icon,
-                   // animation: google.maps.Animation.DROP,
                     id: route
-                });
-                markers.push(route.marker);
-                route.marker.addListener('click', function() {
-                    displayInfowindow(this, infowindow);
-                    route.marker.setAnimation(google.maps.Animation.DROP);
-                    map.setCenter(route.marker.getPosition());
-                });
-         // Extend the boundaries of the map for each marker and display the marker
-                bounds.extend(route.marker.position);
-                
-            } else {
-                if (filteredPlace.indexOf(searchStr) !== -1) {
-                    route.marker.setVisible(true);
-                    markers.push(route.marker);
-                    route.marker.addListener('click', function() {
-                        displayInfowindow(this, infowindow);
-                        map.setCenter(route.marker.getPosition());
-                    });
-                }
-            }
-        });
-        
+            });
+            markers.push(route.marker);
+            route.marker.addListener('click', function() {
+                displayInfowindow(this, infowindow);
+                route.marker.setAnimation(google.maps.Animation.DROP);
+                map.setCenter(route.marker.getPosition());
+            });                
+            bounds.extend(route.marker.position);
+        });       
        google.maps.event.addDomListener(window, 'resize', function() {
             map.fitBounds(bounds); 
         }); 
@@ -299,6 +286,7 @@ var ViewModel = function() {
             marker.setVisible(false);
         });
         markers = [];
+        map.fitBounds(bounds);
     }
     
     function displayAllRoute(directionsService, directionsDisplay) {
