@@ -60,14 +60,11 @@ var trailRoutes = [{
 		}
 }];
 
-var startNames = ['Turku', 'Pargas', 'Nagu', 'Korpo', 'Houtskär', 'Iniö', 'Kustavi', 'Taivassalo', 'Askainen', 'Merimasku', 'Naantali'];
-
-var endNames = ['Pargas', 'Nagu', 'Korpo', 'Houtskär', 'Iniö', 'Kustavi', 'Taivassalo', 'Askainen', 'Merimasku', 'Naantali', 'Turku'];
-
 var Trail = function() {
 	this.headline = ko.observable("The Archipelago Trail");
 	this.trailDescription = ko.observable("The Archipelago Trail is a route in the Archipelago Sea in Finland, which uses roads and ferry connections to visit many of the major island in this archipelago. The trail is some 250 km in length. Along the way you will find 12 bridges, 9 ferries, local history museums and village churches from the Middle Ages. The route is usually begun and ended in Turku, although other starting points are possible.");
 	this.selectInstruction = ko.observable(' (please search for a route or choose it from the list)');
+	   
 };
 
 var ViewModel = function() {
@@ -75,7 +72,7 @@ var ViewModel = function() {
 	self.trail = ko.observable(new Trail());
     
 // initialize map
-    var directionsService = new google.maps.DirectionsService;
+    var directionsService = new google.maps.DirectionsService();
     var directionsDisplay = new google.maps.DirectionsRenderer({
 		polylineOptions: {
 			strokeColor: "red"
@@ -166,18 +163,10 @@ var ViewModel = function() {
 	
 	// display all routes in the trail when opening an app
  	displayAllRoute(directionsService, directionsDisplay);
- 		
- 	// calculate distance and duration for each route
-	document.getElementById('submit').addEventListener('click', function() {
-		calculateAndDisplayRoute(directionsService, directionsDisplay);
-	});
-	
+ 	
 	self.searchTerm = ko.observable('');
 	self.routes = ko.observableArray(trailRoutes);
-	self.startRoutes = ko.observableArray(startNames);
-	self.endRoutes = ko.observableArray(endNames);
-	selectedStart = ko.observable('');
-	selectedEnd = ko.observable('');
+	
 	
 	// infowindow object for a marker to show route information
 	var infowindow = new google.maps.InfoWindow({
@@ -186,12 +175,12 @@ var ViewModel = function() {
     
      // Limits the map to display all the locations on the screen
     var bounds = new google.maps.LatLngBounds();
-      
+   
 	// function for listview
 	self.filteredList = ko.computed(function() {
         var searchStr = self.searchTerm().toLowerCase();
         if (searchStr === "") {
-            return self.routes();
+            return self.routes();           
         } else {
             infowindow.close();
             return ko.utils.arrayFilter(self.routes(), function(route) {
@@ -205,23 +194,23 @@ var ViewModel = function() {
 	self.showMarker = ko.computed(function() {
 		var searchStr = self.searchTerm().toLowerCase();
 		if (!searchStr) {
-			showMap(searchStr);
+			createMarker(searchStr);
 		} else {	
 		    clearMarkers();
-			showMap(searchStr);
+			createMarker(searchStr);
 		}
 	});
     	
 	// show a marker when selecting a route
-	self.selectedRoute = function(data) {
-		displayInfowindow(data.marker, infowindow);
-		map.setCenter(data.marker.getPosition())
-        data.marker.setAnimation(google.maps.Animation.BOUNCE);
+	self.selectedRoute = function(route) {
+		displayInfowindow(route.marker, infowindow);
+		map.setCenter(route.marker.getPosition());
+        route.marker.setAnimation(google.maps.Animation.BOUNCE);
         setTimeout(function() {
-      		data.marker.setAnimation(null);
+      		route.marker.setAnimation(null);
      	}, 1400);
     };    
-    
+       
     // show infowindow and image from flickr
 	function displayInfowindow(marker, infowindow) {
 	    
@@ -232,25 +221,27 @@ var ViewModel = function() {
 			var method = 'flickr.photos.search';
 			var query = marker.title.replace(/(\d\.\s)/, '');
 			var url = 'https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=d0a155691c7ca5de826eaa4357fd6c64&user_id=20275866%40N00&text=' + query + '&format=json&nojsoncallback=1';
-
-            var request = new XMLHttpRequest();
-            request.open('GET', url, true);
-            request.onload = function() {
-                
-                if (request.status >= 200 && request.status < 400) {
-                    var data = JSON.parse(request.responseText);
-                    var flickrPhoto = data.photos.photo[0];
-                        
-                    infowindow.setContent('<div><strong>' + marker.title + '</strong><br><p id="info-description"><img id="info-img" src="https://farm' + flickrPhoto.farm + '.staticflickr.com/' + flickrPhoto.server + '/' + flickrPhoto.id + '_' + flickrPhoto.secret + '_n.jpg">' + marker.description + '</p></div>');
-                        
+           
+            fetch(url)
+            .then(function(response) {
+                if (response.status === 200) {
+                    response.json().then(function(data) {
+            
+                var flickrPhoto = data.photos.photo[0];
+                var infoContent = '<div><strong>' + marker.title + '</strong><br><p id="info-description"><img id="info-img" src="https://farm' + flickrPhoto.farm + '.staticflickr.com/' + flickrPhoto.server + '/' + flickrPhoto.id + '_' + flickrPhoto.secret + '_n.jpg">' + marker.description + '</p></div>';
+                    
+                var noImgError = 'No Flickr Image Found for this place';
+                    
+                    (flickrPhoto) ? infowindow.setContent(infoContent) : infowindow.setContent(noImgError)
+                    
+                    })
+                } else {
+                    infowindow.setContent('your status is: ' + response.status);
                 }
-            };
-
-            request.onerror = function() {
-                infowindow.setContent('<div>No Flickr Image Found for here </div>');
-            };
-
-            request.send(); 
+                    
+            }).catch(function(err) {
+                window.alert('It seems that you have a network issue to receive Flickr Image.');
+            });
 			
 			infowindow.open(map, marker);
 			
@@ -260,12 +251,12 @@ var ViewModel = function() {
 		}
 	}
 		
-    function showMap(searchStr) {    
+    function createMarker(searchStr) {    
         self.routes().forEach(function(route) {
             var position = route.coordinates;
             var title = route.title;
             var description = route.description;
-            var icon = "http://maps.google.com/mapfiles/kml/paddle/" + route.number + ".png"
+            var icon = "http://maps.google.com/mapfiles/kml/paddle/" + route.number + ".png";
             var filteredPlace = route.title.toLowerCase();
             if (searchStr === "") {
                 route.marker = new google.maps.Marker({
@@ -274,13 +265,14 @@ var ViewModel = function() {
                     title: title,
                     description: description,
                     icon: icon,
-                    animation: google.maps.Animation.DROP,
+                   // animation: google.maps.Animation.DROP,
                     id: route
                 });
                 markers.push(route.marker);
                 route.marker.addListener('click', function() {
                     displayInfowindow(this, infowindow);
-                    map.setCenter(route.marker.getPosition())
+                    route.marker.setAnimation(google.maps.Animation.DROP);
+                    map.setCenter(route.marker.getPosition());
                 });
          // Extend the boundaries of the map for each marker and display the marker
                 bounds.extend(route.marker.position);
@@ -291,13 +283,15 @@ var ViewModel = function() {
                     markers.push(route.marker);
                     route.marker.addListener('click', function() {
                         displayInfowindow(this, infowindow);
-                        map.setCenter(route.marker.getPosition())
+                        map.setCenter(route.marker.getPosition());
                     });
                 }
             }
         });
-    // display all markers
-       map.fitBounds(bounds); 
+        
+       google.maps.event.addDomListener(window, 'resize', function() {
+            map.fitBounds(bounds); 
+        }); 
     }
     
     function clearMarkers() {
@@ -323,33 +317,6 @@ var ViewModel = function() {
 		}
 	});
 }
-
-    function calculateAndDisplayRoute(directionsService, directionsDisplay) {
-	    var origin = document.getElementById('start').value;
-	    var destination = document.getElementById('end').value;
-
-	    directionsService.route({
-		origin: origin, 
-		destination: destination, 
-		travelMode: 'BICYCLING'
-	    }, function(response, status) {
-		    if (status === 'OK') {
-			directionsDisplay.setDirections(response);
-			var route = response.routes[0];
-			var summaryPanel = document.getElementById('directions-panel');
-			summaryPanel.innerHTML = '';
-			var routeSegment = origin + ' to ' + destination;
-			summaryPanel.innerHTML += '<b>Route: ' + routeSegment + '</b><br>';
-			// For each route, display summary information.
-			for (var i = 0; i < route.legs.length; i++) {
-				var place = route.legs[i];
-				summaryPanel.innerHTML += '•' + place.distance.text + ' 🚲 ' + place.duration.text + '<br>';
-			}
-		} else {
-			window.alert('Directions request failed due to ' + status);
-		    }
-	    });
-    }
 
 };
 
