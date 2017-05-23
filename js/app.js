@@ -1,8 +1,5 @@
-//
-var map;
-var markers = [];
-
-var trailRoutes = [{
+var Routes = {
+    trailRoutes: [{
         number: 1, 
         title: '1.  Turku - Pargas',
 		description: "Heading in a southerly direction from Turku runs Highway 118 through the city of Kaarina and on to the Archipelago town Pargas. On the way you can take a 6 km detour to see the historic Kuusisto Castle Ruins.",
@@ -58,7 +55,8 @@ var trailRoutes = [{
 		    lat: 60.466402,
 		    lng: 22.123127
 		}
-}];
+}]
+};
 
 var Trail = function() {
 	this.headline = ko.observable("The Archipelago Trail");
@@ -69,8 +67,13 @@ var Trail = function() {
 
 var ViewModel = function() {
 	var self = this;
+	var map, bounds, infowindow;
+	
 	self.trail = ko.observable(new Trail());
-    
+    self.searchTerm = ko.observable(''); 
+	self.routes = ko.observableArray(); 
+	self.currentRoute = ko.observable(null);
+	
 // initialize map
     var directionsService = new google.maps.DirectionsService();
     var directionsDisplay = new google.maps.DirectionsRenderer({
@@ -163,64 +166,77 @@ var ViewModel = function() {
 	
 	// display all routes in the trail when opening an app
  	displayAllRoute(directionsService, directionsDisplay);
- 	
-	self.searchTerm = ko.observable('');
-	self.routes = ko.observableArray(trailRoutes);
-	
-	
+ 		
+     // Limits the map to display all the locations on the screen
+    bounds = new google.maps.LatLngBounds();
+    
 	// infowindow object for a marker to show route information
-	var infowindow = new google.maps.InfoWindow({
+	infowindow = new google.maps.InfoWindow({
         maxWidth: 300,
     });
     
-     // Limits the map to display all the locations on the screen
-    var bounds = new google.maps.LatLngBounds();
+    var routesList = Routes.trailRoutes; 
     
-	// function for listview
+    routesList.forEach(function(route) {
+        var position = route.coordinates;
+        var title = route.title;
+        var description = route.description;
+        var icon = "http://maps.google.com/mapfiles/kml/paddle/" + route.number + ".png";
+        
+        var marker = new google.maps.Marker({
+                map: map,
+                position: position,
+                title: title,
+                description: description,
+                icon: icon,
+        });
+        
+        marker.addListener('click', function() {
+            map.setCenter(marker.getPosition());
+            marker.setAnimation(google.maps.Animation.DROP);
+            displayInfowindow(this, infowindow);
+            clearMarkers();
+            self.currentRoute(this);
+        });               
+        bounds.extend(marker.position);
+        self.routes.push(marker);
+    });
+
+	// listview
 	self.filteredList = ko.computed(function() {
 	    infowindow.close();
-	    clearMarkers();
-        showMarkers();
-	   
-      var searchStr = self.searchTerm().toLowerCase();   
-         
-        if (!searchStr) {
-            
-            return self.routes(); 
-                      
-        } else {
-             return self.routes().filter((route) => {           
-                var title = route.title.toLowerCase();
-                var isMatching = title.indexOf(searchStr) !== -1;
-                
-                if (isMatching) {
-                    route.marker.setVisible(true);
-                } else {
-                    route.marker.setVisible(false);
-                }
-
-                return isMatching;                 
-            });
-        }
-    });
-     	
+        return self.routes().filter((marker) => {
+            map.fitBounds(bounds);           
+            var title = marker.title.toLowerCase();
+            var searchStr = self.searchTerm().toLowerCase();
+            var isMatching = title.indexOf(searchStr) !== -1;   
+            if (isMatching) {
+                marker.setVisible(true);
+            } else {
+                marker.setVisible(false);        
+            }
+            return isMatching;                 
+        });
+    }, self);
+    
 	// show a marker when selecting a route
 	self.selectedRoute = function(route) {
-		displayInfowindow(route.marker, infowindow);
-		map.setCenter(route.marker.getPosition());
-        route.marker.setAnimation(google.maps.Animation.BOUNCE);
+     	displayInfowindow(route, infowindow);
+     	map.setCenter(route.getPosition());
+     	route.setAnimation(google.maps.Animation.BOUNCE);
         setTimeout(function() {
-      		route.marker.setAnimation(null);
+      		route.setAnimation(null);
      	}, 1400);
     };    
        
+    google.maps.event.addDomListener(window, 'resize', function() {
+        map.fitBounds(bounds); 
+    }); 
+    
     // show infowindow and image from flickr
 	function displayInfowindow(marker, infowindow) {
 	    
-       // if (infowindow.marker != marker) {
             infowindow.setContent('');
-           // infowindow.marker = marker;
-		
 			var method = 'flickr.photos.search';
 			var query = marker.title.replace(/(\d\.\s)/, '');
 			var url = 'https://api.flickr.com/services/rest/?method=flickr.photos.search&api_key=d0a155691c7ca5de826eaa4357fd6c64&user_id=20275866%40N00&text=' + query + '&format=json&nojsoncallback=1';
@@ -248,46 +264,15 @@ var ViewModel = function() {
 			
 			infowindow.open(map, marker);
 			
-			 infowindow.addListener('closeclick', function() {
+			infowindow.addListener('closeclick', function() {
                 infowindow.marker = null;
             });
-		//}
 	}
-		
-    function showMarkers() {    
-        self.routes().forEach(function(route) {
-            var position = route.coordinates;
-            var title = route.title;
-            var description = route.description;
-            var icon = "http://maps.google.com/mapfiles/kml/paddle/" + route.number + ".png";
-            route.marker = new google.maps.Marker({
-                    map: map,
-                    position: position,
-                    title: title,
-                    description: description,
-                    icon: icon,
-                    id: route
-            });
-            markers.push(route.marker);
-            route.marker.addListener('click', function() {
-                displayInfowindow(this, infowindow);
-                route.marker.setAnimation(google.maps.Animation.DROP);
-                map.setCenter(route.marker.getPosition());
-            });                
-            bounds.extend(route.marker.position);
-        });       
-       google.maps.event.addDomListener(window, 'resize', function() {
-            map.fitBounds(bounds); 
-        }); 
-    }
     
     function clearMarkers() {
-        markers.forEach(function(marker) {
-            marker.setVisible(false);
-        });
-        markers = [];
+        self.currentRoute(null);
         map.fitBounds(bounds);
-    }
+    }    
     
     function displayAllRoute(directionsService, directionsDisplay) {
 	    var waypts = [{location: {lat: 60.3010824, lng: 22.3022414}}, {location: {lat: 60.1927157, lng: 21.9091942}}, {location: {lat: 60.162672, lng: 21.5620048}}, {location: {lat: 60.2228907, lng: 21.3722884}}, {location: {lat: 60.3968738, lng: 21.3869553}}, {location: {lat: 60.5449963, lng: 21.3553431}}, {location: {lat: 60.5616121, lng: 21.6133239}}, {location: {lat: 60.5711454, lng: 21.831107}}, {location: {lat: 60.4810769, lng: 21.8712123}}, {location: {lat: 60.4660876, lng: 22.0250873}} ];
